@@ -2,7 +2,7 @@
 
 import { COLORS, SANS } from "../lib/constants";
 
-export default function Avatar({ name = "?", size = 36, tone = COLORS.royal }) {
+export default function Avatar({ name = "?", size = 36, tone = COLORS.royal, avatarUrl = null }) {
   const initials = name
     .split(" ")
     .map((w) => w[0])
@@ -10,6 +10,22 @@ export default function Avatar({ name = "?", size = 36, tone = COLORS.royal }) {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          objectFit: "cover",
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
 
   return (
     <div
