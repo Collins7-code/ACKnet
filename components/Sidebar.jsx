@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, LogOut, Menu, X } from "lucide-react";
+import { Home, Users, LogOut, Menu, X, ShieldCheck } from "lucide-react";
 import { COLORS, SERIF, SANS, PROGRAMMES } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
 import Avatar from "./Avatar";
