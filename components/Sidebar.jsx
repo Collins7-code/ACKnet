@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, LogOut, Menu, X, ShieldCheck } from "lucide-react";
+import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera } from "lucide-react";
 import { COLORS, SERIF, SANS, PROGRAMMES } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
+import { supabase } from "../lib/supabaseClient";
 import Avatar from "./Avatar";
 
 function NavItem({ href, icon: Icon, label, active, dot }) {
@@ -35,9 +36,49 @@ function NavItem({ href, icon: Icon, label, active, dot }) {
   );
 }
 
+function RoleBadge({ role }) {
+  const isTeacher = role === "teacher";
+  return (
+    <span
+      style={{
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: 0.3,
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: isTeacher ? "#2F8F5B" : "#4FA8DC",
+        color: "#fff",
+        display: "inline-block",
+        textTransform: "uppercase",
+      }}
+    >
+      {isTeacher ? "Teacher" : "Student"}
+    </span>
+  );
+}
+
 function SidebarContent() {
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
+  const { profile, user, signOut, refreshProfile } = useAuth();
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setUploading(true);
+
+    const path = `${user.id}/${Date.now()}-${file.name}`;
+    const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file);
+
+    if (!uploadErr) {
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      await supabase.from("profiles").update({ avatar_url: data.publicUrl }).eq("id", user.id);
+      await refreshProfile();
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
 
   return (
     <div style={{ width: 236, background: COLORS.navy, height: "100%", display: "flex", flexDirection: "column", padding: "22px 14px", boxSizing: "border-box" }}>
@@ -73,14 +114,24 @@ function SidebarContent() {
       )}
 
       <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
-        <Avatar name={profile?.full_name || "?"} size={32} tone={COLORS.sky} />
+        <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: "none" }} id="avatar-upload" />
+        <label htmlFor="avatar-upload" style={{ position: "relative", cursor: "pointer", flexShrink: 0 }}>
+          <Avatar name={profile?.full_name || "?"} size={32} tone={COLORS.sky} avatarUrl={profile?.avatar_url} />
+          <div
+            style={{
+              position: "absolute", bottom: -2, right: -2, width: 15, height: 15, borderRadius: "50%",
+              background: COLORS.royal, display: "flex", alignItems: "center", justifyContent: "center",
+              border: `1.5px solid ${COLORS.navy}`,
+            }}
+          >
+            <Camera size={9} color="#fff" />
+          </div>
+        </label>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, color: "#fff", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {profile?.full_name || "…"}
+            {uploading ? "Uploading…" : profile?.full_name || "…"}
           </div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)" }}>
-            {profile?.role === "teacher" ? "Teacher" : profile?.form || "Student"}
-          </div>
+          <div style={{ marginTop: 3 }}>{profile?.role && <RoleBadge role={profile.role} />}</div>
         </div>
         <button onClick={signOut} title="Sign out" style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", padding: 4 }}>
           <LogOut size={16} />
