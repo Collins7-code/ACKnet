@@ -66,6 +66,11 @@ function SidebarContent() {
           <NavItem href="/lounge" icon={Users} label="Teachers' Lounge" active={pathname === "/lounge"} />
         </div>
       )}
+      {profile?.is_admin && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 18 }}>
+          <NavItem href="/admin" icon={ShieldCheck} label="Admin Panel" active={pathname === "/admin"} />
+        </div>
+      )}
 
       <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
         <Avatar name={profile?.full_name || "?"} size={32} tone={COLORS.sky} />
