@@ -15,7 +15,7 @@ export function AuthProvider({ children }) {
       setProfile(null);
       return;
     }
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
@@ -41,7 +41,9 @@ export function AuthProvider({ children }) {
         id: user.id,
         full_name: fullName,
         avatar_url: avatarUrl,
+        email: user.email,
         role: isFirstAdmin ? "teacher" : "student",
+        is_admin: isFirstAdmin,
       })
       .select()
       .single();
@@ -50,7 +52,7 @@ export function AuthProvider({ children }) {
       setProfile(created);
     } else {
       // eslint-disable-next-line no-console
-      console.error("Could not create profile:", insertError.message, error);
+      console.error("Could not create profile:", insertError.message);
     }
   }, []);
 
@@ -95,15 +97,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{
-        session,
-        user: session?.user ?? null,
-        profile,
-        loading,
-        signInWithGoogle,
-        signOut,
-        refreshProfile,
-      }}
+      value={{ session, user: session?.user ?? null, profile, loading, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
