@@ -43,6 +43,7 @@ export default function Sessions({ hubId }) {
       when_text: when.trim(),
       meet_url: meetUrl.trim(),
       is_live: false,
+      created_by: profile.id,
     });
     setTitle("");
     setWhen("");
