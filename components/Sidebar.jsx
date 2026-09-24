@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera } from "lucide-react";
+import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera, MessageSquare } from "lucide-react";
 import { COLORS, SERIF, SANS, PROGRAMMES } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
 import { supabase } from "../lib/supabaseClient";
@@ -92,6 +92,7 @@ function SidebarContent() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 18 }}>
         <NavItem href="/general" icon={Home} label="General Hub" active={pathname === "/general"} />
+        <NavItem href="/messages" icon={MessageSquare} label="Messages" active={pathname === "/messages"} />
       </div>
 
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", padding: "0 12px", marginBottom: 6, fontFamily: SANS }}>Course hubs</div>
