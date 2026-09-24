@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { MessageSquare, Video, FolderOpen, ClipboardList } from "lucide-react";
+import { MessageSquare, Video, FolderOpen, ClipboardList, NotebookPen } from "lucide-react";
 import ProtectedShell from "../../../components/ProtectedShell";
 import Discussion from "../../../components/Discussion";
 import Sessions from "../../../components/Sessions";
 import Resources from "../../../components/Resources";
 import Tests from "../../../components/Tests";
+import Assignments from "../../../components/Assignments";
 import { COLORS, SERIF, findProgramme } from "../../../lib/constants";
 
 const TABS = [
@@ -15,6 +16,7 @@ const TABS = [
   { id: "sessions", label: "Live Sessions", icon: Video },
   { id: "resources", label: "Resources", icon: FolderOpen },
   { id: "tests", label: "Tests & Exercises", icon: ClipboardList },
+  { id: "assignments", label: "Assignments", icon: NotebookPen },
 ];
 
 export default function CourseHubPage() {
@@ -59,6 +61,7 @@ export default function CourseHubPage() {
           {tab === "sessions" && <Sessions hubId={programme.id} />}
           {tab === "resources" && <Resources hubId={programme.id} />}
           {tab === "tests" && <Tests hubId={programme.id} />}
+          {tab === "assignments" && <Assignments hubId={programme.id} />}
         </>
       )}
     </ProtectedShell>
