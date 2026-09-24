@@ -2,27 +2,34 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { MessageSquare, Video, FolderOpen, ClipboardList, NotebookPen } from "lucide-react";
+import { MessageSquare, Video, FolderOpen, ClipboardList, NotebookPen, Award } from "lucide-react";
 import ProtectedShell from "../../../components/ProtectedShell";
 import Discussion from "../../../components/Discussion";
 import Sessions from "../../../components/Sessions";
 import Resources from "../../../components/Resources";
 import Tests from "../../../components/Tests";
 import Assignments from "../../../components/Assignments";
+import Results from "../../../components/Results";
+import { useAuth } from "../../../lib/AuthProvider";
 import { COLORS, SERIF, findProgramme } from "../../../lib/constants";
 
-const TABS = [
-  { id: "discussion", label: "Discussion", icon: MessageSquare },
-  { id: "sessions", label: "Live Sessions", icon: Video },
-  { id: "resources", label: "Resources", icon: FolderOpen },
-  { id: "tests", label: "Tests & Exercises", icon: ClipboardList },
-  { id: "assignments", label: "Assignments", icon: NotebookPen },
-];
+function tabsFor(isTeacher) {
+  return [
+    { id: "discussion", label: "Discussion", icon: MessageSquare },
+    { id: "sessions", label: "Live Sessions", icon: Video },
+    { id: "resources", label: "Resources", icon: FolderOpen },
+    { id: "tests", label: "Tests & Exercises", icon: ClipboardList },
+    { id: "assignments", label: "Assignments", icon: NotebookPen },
+    { id: "results", label: isTeacher ? "Results" : "My Results", icon: Award },
+  ];
+}
 
 export default function CourseHubPage() {
   const { hubId } = useParams();
+  const { profile } = useAuth();
   const [tab, setTab] = useState("discussion");
   const programme = findProgramme(hubId);
+  const TABS = tabsFor(profile?.role === "teacher" || profile?.is_admin);
 
   return (
     <ProtectedShell>
@@ -62,6 +69,7 @@ export default function CourseHubPage() {
           {tab === "resources" && <Resources hubId={programme.id} />}
           {tab === "tests" && <Tests hubId={programme.id} />}
           {tab === "assignments" && <Assignments hubId={programme.id} />}
+          {tab === "results" && <Results hubId={programme.id} />}
         </>
       )}
     </ProtectedShell>
