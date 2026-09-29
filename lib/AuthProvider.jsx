@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
   const loadProfile = useCallback(async (user) => {
     if (!user) {
@@ -59,21 +60,47 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      setSession(data.session ?? null);
-      await loadProfile(data.session?.user ?? null);
-      setLoading(false);
-    });
+    // Safety net: never let the app hang on "Loading…" forever, even if
+    // Supabase is unreachable or misconfigured (e.g. missing env vars).
+    const failSafe = setTimeout(() => {
+      if (mounted) {
+        setAuthError("This is taking longer than expected. Check your connection and try refreshing.");
+        setLoading(false);
+      }
+    }, 10000);
+
+    (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!mounted) return;
+        setSession(data.session ?? null);
+        await loadProfile(data.session?.user ?? null);
+      } catch (err) {
+        if (mounted) setAuthError(err.message || "Could not connect. Please refresh.");
+      } finally {
+        if (mounted) {
+          clearTimeout(failSafe);
+          setLoading(false);
+        }
+      }
+    })();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
-      setSession(newSession);
-      await loadProfile(newSession?.user ?? null);
-      setLoading(false);
+      try {
+        setSession(newSession);
+        await loadProfile(newSession?.user ?? null);
+        setAuthError(null);
+      } catch (err) {
+        setAuthError(err.message || "Could not connect. Please refresh.");
+      } finally {
+        setLoading(false);
+      }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(failSafe);
       listener.subscription.unsubscribe();
     };
   }, [loadProfile]);
@@ -97,7 +124,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, signInWithGoogle, signOut, refreshProfile }}
+      value={{ session, user: session?.user ?? null, profile, loading, authError, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
