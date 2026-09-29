@@ -1,9 +1,25 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
 const AuthContext = createContext(null);
+
+// Retry a Supabase query a couple of times with a short delay before giving
+// up — free-tier Supabase databases can take a few seconds to "wake" after
+// being idle, and a single slow response shouldn't be treated as a hard failure.
+async function withRetry(fn, { attempts = 3, delayMs = 1500 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined);
@@ -11,28 +27,33 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [authStage, setAuthStage] = useState("starting");
+  const authStageRef = useRef("starting");
+
+  const setStage = useCallback((s) => {
+    authStageRef.current = s;
+    setAuthStage(s);
+  }, []);
 
   const loadProfile = useCallback(async (user) => {
     if (!user) {
       setProfile(null);
       return;
     }
-    setAuthStage("profile: looking up");
-    const { data, error: selectError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (selectError) throw new Error(`profile lookup failed: ${selectError.message}`);
+    setStage("profile: looking up");
+    const { data, error: selectError } = await withRetry(() =>
+      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then((res) => {
+        if (res.error) throw res.error;
+        return res;
+      })
+    );
 
     if (data) {
       setProfile(data);
-      setAuthStage("done");
+      setStage("done");
       return;
     }
 
-    setAuthStage("profile: creating");
+    setStage("profile: creating");
     const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
     const avatarUrl = user.user_metadata?.avatar_url || null;
 
@@ -57,27 +78,27 @@ export function AuthProvider({ children }) {
 
     if (!insertError) {
       setProfile(created);
-      setAuthStage("done");
+      setStage("done");
     } else {
       throw new Error(`profile creation failed: ${insertError.message}`);
     }
-  }, []);
+  }, [setStage]);
 
   useEffect(() => {
     let mounted = true;
 
-    // Safety net: never let the app hang on "Loading…" forever, even if
-    // Supabase is unreachable or misconfigured (e.g. missing env vars).
+    // Safety net: never let the app hang on "Loading…" forever. Long enough
+    // to cover a couple of retries against a "waking up" free-tier database.
     const failSafe = setTimeout(() => {
       if (mounted) {
-        setAuthError(`Stuck at step: "${authStage}". Check your connection and try refreshing.`);
+        setAuthError(`Stuck at step: "${authStageRef.current}". Check your connection and try refreshing.`);
         setLoading(false);
       }
-    }, 10000);
+    }, 20000);
 
     (async () => {
       try {
-        setAuthStage("checking session");
+        setStage("checking session");
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         if (!mounted) return;
@@ -95,7 +116,7 @@ export function AuthProvider({ children }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       try {
-        setAuthStage(`auth event: ${event}`);
+        setStage(`auth event: ${event}`);
         setSession(newSession);
         await loadProfile(newSession?.user ?? null);
         setAuthError(null);
