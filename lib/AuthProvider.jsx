@@ -5,14 +5,23 @@ import { supabase } from "./supabaseClient";
 
 const AuthContext = createContext(null);
 
-// Retry a Supabase query a couple of times with a short delay before giving
-// up — free-tier Supabase databases can take a few seconds to "wake" after
-// being idle, and a single slow response shouldn't be treated as a hard failure.
-async function withRetry(fn, { attempts = 3, delayMs = 1500 } = {}) {
+// Retry a Supabase query a few times before giving up — free-tier Supabase
+// databases can take a while to "wake" after being idle, and a single
+// request can hang (not just fail) during that wake-up. Each attempt gets
+// its own timeout so a hung request is abandoned and retried with a fresh
+// one, rather than blocking forever.
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("request timed out")), ms)),
+  ]);
+}
+
+async function withRetry(fn, { attempts = 4, delayMs = 800, timeoutMs = 7000 } = {}) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await fn();
+      return await withTimeout(fn(), timeoutMs);
     } catch (err) {
       lastErr = err;
       if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
@@ -87,14 +96,15 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    // Safety net: never let the app hang on "Loading…" forever. Long enough
-    // to cover a couple of retries against a "waking up" free-tier database.
+    // Safety net: never let the app hang on "Loading…" forever. Set above
+    // the full retry budget (4 attempts x 7s + delays ≈ 30s) so it only
+    // fires once every retry has genuinely been exhausted.
     const failSafe = setTimeout(() => {
       if (mounted) {
         setAuthError(`Stuck at step: "${authStageRef.current}". Check your connection and try refreshing.`);
         setLoading(false);
       }
-    }, 20000);
+    }, 33000);
 
     (async () => {
       try {
