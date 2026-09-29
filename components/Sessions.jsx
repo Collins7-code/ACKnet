@@ -5,7 +5,7 @@ import { Video, Plus, Radio, Square } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { COLORS, SANS } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
-import JitsiRoom from "./JitsiRoom";
+import LiveVideoRoom from "./LiveVideoRoom";
 
 function StatusDot({ color }) {
   return <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block" }} />;
@@ -118,11 +118,11 @@ export default function Sessions({ hubId }) {
       )}
 
       {activeSession && (
-        <JitsiRoom
+        <LiveVideoRoom
           roomName={activeSession.meet_url}
-          displayName={profile?.full_name}
+          participantName={profile?.full_name}
+          isHost={canGoLive}
           title={activeSession.title}
-          onClose={() => setActiveSessionId(null)}
           onLeave={() => setActiveSessionId(null)}
         />
       )}
