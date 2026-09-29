@@ -10,23 +10,29 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
+  const [authStage, setAuthStage] = useState("starting");
 
   const loadProfile = useCallback(async (user) => {
     if (!user) {
       setProfile(null);
       return;
     }
-    const { data } = await supabase
+    setAuthStage("profile: looking up");
+    const { data, error: selectError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", user.id)
       .maybeSingle();
 
+    if (selectError) throw new Error(`profile lookup failed: ${selectError.message}`);
+
     if (data) {
       setProfile(data);
+      setAuthStage("done");
       return;
     }
 
+    setAuthStage("profile: creating");
     const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
     const avatarUrl = user.user_metadata?.avatar_url || null;
 
@@ -51,9 +57,9 @@ export function AuthProvider({ children }) {
 
     if (!insertError) {
       setProfile(created);
+      setAuthStage("done");
     } else {
-      // eslint-disable-next-line no-console
-      console.error("Could not create profile:", insertError.message);
+      throw new Error(`profile creation failed: ${insertError.message}`);
     }
   }, []);
 
@@ -64,13 +70,14 @@ export function AuthProvider({ children }) {
     // Supabase is unreachable or misconfigured (e.g. missing env vars).
     const failSafe = setTimeout(() => {
       if (mounted) {
-        setAuthError("This is taking longer than expected. Check your connection and try refreshing.");
+        setAuthError(`Stuck at step: "${authStage}". Check your connection and try refreshing.`);
         setLoading(false);
       }
     }, 10000);
 
     (async () => {
       try {
+        setAuthStage("checking session");
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         if (!mounted) return;
@@ -86,8 +93,9 @@ export function AuthProvider({ children }) {
       }
     })();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       try {
+        setAuthStage(`auth event: ${event}`);
         setSession(newSession);
         await loadProfile(newSession?.user ?? null);
         setAuthError(null);
@@ -103,6 +111,7 @@ export function AuthProvider({ children }) {
       clearTimeout(failSafe);
       listener.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadProfile]);
 
   const signInWithGoogle = useCallback(async () => {
@@ -124,7 +133,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, authError, signInWithGoogle, signOut, refreshProfile }}
+      value={{ session, user: session?.user ?? null, profile, loading, authError, authStage, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
