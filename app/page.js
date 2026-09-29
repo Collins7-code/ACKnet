@@ -7,7 +7,7 @@ import { useAuth } from "../lib/AuthProvider";
 import { COLORS, SERIF } from "../lib/constants";
 
 export default function HomePage() {
-  const { session, loading, signInWithGoogle } = useAuth();
+  const { session, loading, authError, authStage, signInWithGoogle } = useAuth();
   const router = useRouter();
   const [lit, setLit] = useState(false);
 
@@ -15,10 +15,25 @@ export default function HomePage() {
     if (session) router.replace("/general");
   }, [session, router]);
 
+  if (authError) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, color: "#fff", background: "#050b18", padding: 24, textAlign: "center" }}>
+        <div>{authError}</div>
+        <button
+          onClick={() => window.location.reload()}
+          style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: "#4FA8DC", color: "#fff", cursor: "pointer", fontSize: 13 }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", background: "#050b18" }}>
-        Loading…
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: "#fff", background: "#050b18" }}>
+        <div>Loading…</div>
+        <div style={{ fontSize: 11, opacity: 0.5 }}>{authStage}</div>
       </div>
     );
   }
