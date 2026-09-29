@@ -8,7 +8,7 @@ import Sidebar from "./Sidebar";
 import NotificationBell from "./NotificationBell";
 
 export default function ProtectedShell({ children }) {
-  const { session, profile, loading, authError } = useAuth();
+  const { session, profile, loading, authError, authStage } = useAuth();
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(true);
 
@@ -40,8 +40,9 @@ export default function ProtectedShell({ children }) {
 
   if (loading || !session) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: COLORS.slate }}>
-        Loading…
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, color: COLORS.slate }}>
+        <div>Loading…</div>
+        <div style={{ fontSize: 11, opacity: 0.6, fontFamily: SANS }}>{authStage}</div>
       </div>
     );
   }
