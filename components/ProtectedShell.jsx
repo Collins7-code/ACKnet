@@ -8,13 +8,13 @@ import Sidebar from "./Sidebar";
 import NotificationBell from "./NotificationBell";
 
 export default function ProtectedShell({ children }) {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, authError } = useAuth();
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(true);
 
   useEffect(() => {
-    if (!loading && session === null) router.replace("/");
-  }, [loading, session, router]);
+    if (!loading && !authError && session === null) router.replace("/");
+  }, [loading, authError, session, router]);
 
   useEffect(() => {
     if (profile) {
@@ -23,6 +23,20 @@ export default function ProtectedShell({ children }) {
       return () => clearTimeout(t);
     }
   }, [profile?.id, profile?.role]);
+
+  if (authError) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, color: COLORS.slate, fontFamily: SANS, padding: 24, textAlign: "center" }}>
+        <div>{authError}</div>
+        <button
+          onClick={() => window.location.reload()}
+          style={{ padding: "8px 18px", borderRadius: 7, border: "none", background: COLORS.royal, color: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 13 }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (loading || !session) {
     return (
