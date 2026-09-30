@@ -100,7 +100,16 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         if (!res.ok) throw new Error(body.error || "Could not get a video token.");
         if (!process.env.NEXT_PUBLIC_LIVEKIT_URL) throw new Error("NEXT_PUBLIC_LIVEKIT_URL is missing on the client.");
 
-        room = new Room({ adaptiveStream: true, dynacast: true });
+        room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+          // Force TURN relay instead of trying direct/STUN first — on
+          // restrictive mobile networks, the direct-connection attempt can
+          // stall for a long time before LiveKit falls back to TURN. Cloud
+          // projects have TURN-over-TLS built in, so this is reliable and
+          // just as fast to set up.
+          rtcConfig: { iceTransportPolicy: "relay" },
+        });
         roomRef.current = room;
 
         room.on(RoomEvent.ParticipantConnected, () => refreshParticipants(room));
@@ -112,10 +121,10 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         });
 
         setStageBoth("connecting to LiveKit server");
-        await withTimeout(room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, body.token), 15000, "connecting to LiveKit server timed out");
+        await withTimeout(room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, body.token), 12000, "connecting to LiveKit server timed out");
 
         setStageBoth("requesting camera & microphone");
-        const tracks = await withTimeout(createLocalTracks({ audio: true, video: true }), 15000, "camera/microphone request timed out (check browser permissions)");
+        const tracks = await withTimeout(createLocalTracks({ audio: true, video: true }), 12000, "camera/microphone request timed out (check browser permissions)");
 
         setStageBoth("publishing your video/audio");
         for (const t of tracks) await room.localParticipant.publishTrack(t);
@@ -171,7 +180,11 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
             <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>{stage}</div>
           </div>
         )}
-        {error && <div style={{ color: "#fff", fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 40 }}>{error}</div>}
+        {error && (
+          <div style={{ color: "#fff", background: "rgba(200,40,40,0.35)", border: "1px solid #d9534f", borderRadius: 8, fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 20, fontWeight: 600 }}>
+            ⚠ {error}
+          </div>
+        )}
         {!connecting && !error && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
             {participants.map((p) => (
