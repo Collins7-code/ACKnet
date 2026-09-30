@@ -58,13 +58,27 @@ function ParticipantTile({ participant, isLocal }) {
   );
 }
 
+function withTimeout(promise, ms, message) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ]);
+}
+
 export default function LiveVideoRoom({ roomName, participantName, isHost, title, onLeave }) {
   const roomRef = useRef(null);
   const [participants, setParticipants] = useState([]);
   const [connecting, setConnecting] = useState(true);
+  const [stage, setStage] = useState("requesting access token");
+  const stageRef = useRef("requesting access token");
   const [error, setError] = useState(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+
+  const setStageBoth = (s) => {
+    stageRef.current = s;
+    setStage(s);
+  };
 
   const refreshParticipants = useCallback((room) => {
     setParticipants([room.localParticipant, ...Array.from(room.remoteParticipants.values())]);
@@ -76,6 +90,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
 
     (async () => {
       try {
+        setStageBoth("requesting access token");
         const res = await fetch("/api/livekit-token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -83,6 +98,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || "Could not get a video token.");
+        if (!process.env.NEXT_PUBLIC_LIVEKIT_URL) throw new Error("NEXT_PUBLIC_LIVEKIT_URL is missing on the client.");
 
         room = new Room({ adaptiveStream: true, dynacast: true });
         roomRef.current = room;
@@ -95,9 +111,13 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
           if (!disposed) onLeave?.();
         });
 
-        await room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, body.token);
+        setStageBoth("connecting to LiveKit server");
+        await withTimeout(room.connect(process.env.NEXT_PUBLIC_LIVEKIT_URL, body.token), 15000, "connecting to LiveKit server timed out");
 
-        const tracks = await createLocalTracks({ audio: true, video: true });
+        setStageBoth("requesting camera & microphone");
+        const tracks = await withTimeout(createLocalTracks({ audio: true, video: true }), 15000, "camera/microphone request timed out (check browser permissions)");
+
+        setStageBoth("publishing your video/audio");
         for (const t of tracks) await room.localParticipant.publishTrack(t);
 
         if (disposed) return;
@@ -105,7 +125,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         setConnecting(false);
       } catch (err) {
         if (!disposed) {
-          setError(err.message);
+          setError(`${err.message} (stuck at: ${stageRef.current})`);
           setConnecting(false);
         }
       }
@@ -145,7 +165,12 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
       </div>
 
       <div style={{ minHeight: 260, padding: 16 }}>
-        {connecting && <div style={{ color: "#fff", fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 40 }}>Connecting to video…</div>}
+        {connecting && (
+          <div style={{ color: "#fff", fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 40 }}>
+            <div>Connecting to video…</div>
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>{stage}</div>
+          </div>
+        )}
         {error && <div style={{ color: "#fff", fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 40 }}>{error}</div>}
         {!connecting && !error && (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 10 }}>
