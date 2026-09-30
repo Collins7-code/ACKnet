@@ -67,6 +67,7 @@ function withTimeout(promise, ms, message) {
 
 export default function LiveVideoRoom({ roomName, participantName, isHost, title, onLeave }) {
   const roomRef = useRef(null);
+  const manualLeaveRef = useRef(false);
   const [participants, setParticipants] = useState([]);
   const [connecting, setConnecting] = useState(true);
   const [stage, setStage] = useState("requesting access token");
@@ -116,8 +117,16 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         room.on(RoomEvent.ParticipantDisconnected, () => refreshParticipants(room));
         room.on(RoomEvent.TrackSubscribed, () => refreshParticipants(room));
         room.on(RoomEvent.LocalTrackPublished, () => refreshParticipants(room));
-        room.on(RoomEvent.Disconnected, () => {
-          if (!disposed) onLeave?.();
+        room.on(RoomEvent.Disconnected, (reason) => {
+          if (disposed) return;
+          if (manualLeaveRef.current) {
+            onLeave?.();
+          } else {
+            // The connection dropped on its own — this is the real failure,
+            // so keep it on screen instead of silently bouncing back.
+            setError(`Connection dropped unexpectedly${reason ? ` (reason: ${reason})` : ""}. This usually means the network is blocking WebRTC media, even over the relay path.`);
+            setConnecting(false);
+          }
         });
 
         setStageBoth("connecting to LiveKit server");
@@ -160,6 +169,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
   };
 
   const leave = () => {
+    manualLeaveRef.current = true;
     roomRef.current?.disconnect();
     onLeave?.();
   };
