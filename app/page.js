@@ -222,16 +222,22 @@ export default function HomePage() {
         transition: "background 1.2s ease",
       }}
     >
-      {/* ambient glow behind everything once lit */}
-      <div
+{/* huge soft crest watermark, blended into the blue glow */}
+      <img
+        src="/crest.webp"
+        alt=""
+        aria-hidden="true"
         style={{
           position: "absolute",
-          top: "22%",
-          width: lit ? 560 : 0,
-          height: lit ? 560 : 0,
-          borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(255,190,110,0.32) 0%, rgba(255,190,110,0) 70%)",
-          transition: "width 1.1s ease, height 1.1s ease",
+          top: "50%",
+          left: "50%",
+          width: 900,
+          height: 900,
+          transform: "translate(-50%, -50%)",
+          opacity: lit ? 0.14 : 0,
+          filter: "grayscale(1) brightness(1.6)",
+          mixBlendMode: "overlay",
+          transition: "opacity 1.6s ease 0.2s",
           pointerEvents: "none",
           zIndex: 0,
         }}
