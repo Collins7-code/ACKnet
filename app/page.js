@@ -80,6 +80,7 @@ export default function HomePage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState("student");
+  const [staffCode, setStaffCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const [formError, setFormError] = useState("");
@@ -145,15 +146,30 @@ export default function HomePage() {
     if (!fullName.trim()) return setFormError("Please enter your full name.");
     if (password.length < 6) return setFormError("Password must be at least 6 characters.");
     if (password !== confirmPassword) return setFormError("Passwords don't match.");
+    if (role === "teacher" && !staffCode.trim()) return setFormError("Enter your staff access code, or choose Student instead.");
 
     setFormLoading(true);
     try {
-      const { needsEmailConfirmation } = await signUpWithEmail({
+      const { needsEmailConfirmation, userId } = await signUpWithEmail({
         fullName: fullName.trim(),
         email: email.trim(),
         password,
-        role,
       });
+
+      if (role === "teacher" && userId) {
+        const res = await fetch("/api/claim-teacher-role", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, fullName: fullName.trim(), email: email.trim(), code: staffCode.trim() }),
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          setFormError(`Account created as a Student — ${body.error || "the staff code was incorrect"}. An admin can upgrade your role later.`);
+          setFormLoading(false);
+          return;
+        }
+      }
+
       if (needsEmailConfirmation) {
         setConfirmSent(true);
       }
@@ -409,6 +425,14 @@ export default function HomePage() {
                       </button>
                     ))}
                   </div>
+                  {role === "teacher" && (
+                    <div style={{ marginTop: 10 }}>
+                      <TextField label="Staff access code" value={staffCode} onChange={setStaffCode} placeholder="Given to you by the school" />
+                      <div style={{ fontSize: 11.5, color: COLORS.slate, marginTop: -8, marginBottom: 6, fontFamily: SANS }}>
+                        Don't have one? Sign up as a Student — an admin can upgrade your account later.
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {formError && <div style={{ color: COLORS.alert, fontSize: 12.5, marginBottom: 12, fontFamily: SANS }}>{formError}</div>}
