@@ -1,5 +1,6 @@
 import "./globals.css";
 import { AuthProvider } from "../lib/AuthProvider";
+import { ThemeProvider } from "../lib/ThemeProvider";
 
 export const metadata = {
   title: "ACKnet — Academy of Christ the King",
@@ -10,7 +11,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
