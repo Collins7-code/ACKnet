@@ -65,9 +65,14 @@ export function AuthProvider({ children }) {
     setStage("profile: creating");
     const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
     const avatarUrl = user.user_metadata?.avatar_url || null;
-    // Self-chosen role from the sign-up form (email/password flow only —
-    // Google sign-in has no role metadata, so it falls back to student).
-    const chosenRole = user.user_metadata?.role === "teacher" ? "teacher" : "student";
+    // Note: we deliberately IGNORE user.user_metadata.role here. A role
+    // claimed by the client (even via our own sign-up form) can't be
+    // trusted — someone could edit the request and claim "teacher" with
+    // no verification. The only legitimate way to become a teacher via
+    // self sign-up is the staff-access-code flow in
+    // /api/claim-teacher-role, which pre-creates the profile with the
+    // right role (using the service-role key) before this code ever runs.
+    // Everyone else always starts as a student.
 
     const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
       .split(",")
@@ -82,7 +87,7 @@ export function AuthProvider({ children }) {
         full_name: fullName,
         avatar_url: avatarUrl,
         email: user.email,
-        role: isFirstAdmin ? "teacher" : chosenRole,
+        role: isFirstAdmin ? "teacher" : "student",
         is_admin: isFirstAdmin,
       })
       .select()
@@ -157,16 +162,16 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const signUpWithEmail = useCallback(async ({ fullName, email, password, role }) => {
+  const signUpWithEmail = useCallback(async ({ fullName, email, password }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, role } },
+      options: { data: { full_name: fullName } },
     });
     if (error) throw error;
     // If email confirmation is required on the Supabase project, signUp
     // succeeds but returns no session until the link is clicked.
-    return { needsEmailConfirmation: !data.session };
+    return { needsEmailConfirmation: !data.session, userId: data.user?.id };
   }, []);
 
   const signInWithEmail = useCallback(async ({ email, password }) => {
