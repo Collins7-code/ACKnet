@@ -65,6 +65,9 @@ export function AuthProvider({ children }) {
     setStage("profile: creating");
     const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
     const avatarUrl = user.user_metadata?.avatar_url || null;
+    // Self-chosen role from the sign-up form (email/password flow only —
+    // Google sign-in has no role metadata, so it falls back to student).
+    const chosenRole = user.user_metadata?.role === "teacher" ? "teacher" : "student";
 
     const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
       .split(",")
@@ -79,7 +82,7 @@ export function AuthProvider({ children }) {
         full_name: fullName,
         avatar_url: avatarUrl,
         email: user.email,
-        role: isFirstAdmin ? "teacher" : "student",
+        role: isFirstAdmin ? "teacher" : chosenRole,
         is_admin: isFirstAdmin,
       })
       .select()
@@ -154,6 +157,23 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const signUpWithEmail = useCallback(async ({ fullName, email, password, role }) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName, role } },
+    });
+    if (error) throw error;
+    // If email confirmation is required on the Supabase project, signUp
+    // succeeds but returns no session until the link is clicked.
+    return { needsEmailConfirmation: !data.session };
+  }, []);
+
+  const signInWithEmail = useCallback(async ({ email, password }) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -164,7 +184,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, authError, authStage, signInWithGoogle, signOut, refreshProfile }}
+      value={{ session, user: session?.user ?? null, profile, loading, authError, authStage, signInWithGoogle, signUpWithEmail, signInWithEmail, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
