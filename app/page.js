@@ -2,14 +2,89 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Flame } from "lucide-react";
+import { Flame, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../lib/AuthProvider";
-import { COLORS, SERIF } from "../lib/constants";
+import { COLORS, SERIF, SANS } from "../lib/constants";
+
+function TextField({ label, type = "text", value, onChange, placeholder, rightSlot }) {
+  return (
+    <label style={{ display: "block", marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.navy, marginBottom: 6, fontFamily: SANS }}>{label}</div>
+      <div style={{ position: "relative" }}>
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          required
+          style={{
+            width: "100%",
+            padding: rightSlot ? "11px 42px 11px 13px" : "11px 13px",
+            borderRadius: 8,
+            border: `1px solid ${COLORS.hair}`,
+            fontSize: 14,
+            fontFamily: SANS,
+            boxSizing: "border-box",
+            outline: "none",
+            color: COLORS.ink,
+          }}
+        />
+        {rightSlot && (
+          <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)" }}>{rightSlot}</div>
+        )}
+      </div>
+    </label>
+  );
+}
+
+function GoogleButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        padding: "11px 16px",
+        borderRadius: 8,
+        border: `1px solid ${COLORS.hair}`,
+        background: "#fff",
+        cursor: "pointer",
+        fontSize: 14,
+        fontFamily: SANS,
+        color: COLORS.ink,
+      }}
+    >
+      <svg width="17" height="17" viewBox="0 0 48 48">
+        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.3-.1-2.7-.4-3.5z" />
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16 3 9 7.6 6.3 14.7z" />
+        <path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.5 36.4 26.9 37 24 37c-5.2 0-9.6-3.3-11.3-8l-6.6 5.1C9 41.3 16 45 24 45z" />
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.6 5.4C41.5 36 45 30.5 45 24c0-1.3-.1-2.7-.4-3.5z" />
+      </svg>
+      Continue with Google
+    </button>
+  );
+}
 
 export default function HomePage() {
-  const { session, loading, authError, authStage, signInWithGoogle } = useAuth();
+  const { session, loading, authError, authStage, signInWithGoogle, signUpWithEmail, signInWithEmail } = useAuth();
   const router = useRouter();
   const [lit, setLit] = useState(false);
+  const [mode, setMode] = useState("signin"); // "signin" | "signup"
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("student");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [formError, setFormError] = useState("");
+  const [formLoading, setFormLoading] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
 
   useEffect(() => {
     if (session) router.replace("/general");
@@ -37,6 +112,57 @@ export default function HomePage() {
       </div>
     );
   }
+
+  const resetForm = () => {
+    setFormError("");
+    setPassword("");
+    setConfirmPassword("");
+  };
+
+  const switchMode = (next) => {
+    setMode(next);
+    resetForm();
+    setConfirmSent(false);
+  };
+
+  const submitSignIn = async (e) => {
+    e.preventDefault();
+    setFormError("");
+    setFormLoading(true);
+    try {
+      await signInWithEmail({ email: email.trim(), password });
+    } catch (err) {
+      setFormError(err.message || "Could not sign in. Check your details and try again.");
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const submitSignUp = async (e) => {
+    e.preventDefault();
+    setFormError("");
+
+    if (!fullName.trim()) return setFormError("Please enter your full name.");
+    if (password.length < 6) return setFormError("Password must be at least 6 characters.");
+    if (password !== confirmPassword) return setFormError("Passwords don't match.");
+
+    setFormLoading(true);
+    try {
+      const { needsEmailConfirmation } = await signUpWithEmail({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        role,
+      });
+      if (needsEmailConfirmation) {
+        setConfirmSent(true);
+      }
+    } catch (err) {
+      setFormError(err.message || "Could not create your account. Please try again.");
+    } finally {
+      setFormLoading(false);
+    }
+  };
 
   const Sconce = ({ side }) => (
     <button
@@ -147,10 +273,10 @@ export default function HomePage() {
       <div
         style={{
           width: "100%",
-          maxWidth: 400,
+          maxWidth: 420,
           background: "#fff",
-          borderRadius: 12,
-          padding: "40px 32px",
+          borderRadius: 14,
+          padding: "36px 32px",
           boxSizing: "border-box",
           opacity: lit ? 1 : 0,
           transform: lit ? "translateY(0)" : "translateY(16px)",
@@ -159,43 +285,155 @@ export default function HomePage() {
           position: "relative",
           zIndex: 2,
           marginTop: lit ? 24 : 0,
+          boxShadow: "0 24px 60px rgba(0,0,0,0.35)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28 }}>
-          <div style={{ fontFamily: SERIF, fontSize: 26, color: COLORS.navy, textAlign: "center" }}>ACKnet</div>
-          <div style={{ fontSize: 13, color: COLORS.slate, marginTop: 4, textAlign: "center" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 25, color: COLORS.navy, textAlign: "center" }}>ACKnet</div>
+          <div style={{ fontSize: 12.5, color: COLORS.slate, marginTop: 4, textAlign: "center" }}>
             Academy of Christ the King, Cape Coast
           </div>
         </div>
 
-        <button
-          onClick={signInWithGoogle}
-          style={{
-            width: "100%",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-            padding: "12px 16px",
-            borderRadius: 8,
-            border: `1px solid ${COLORS.hair}`,
-            background: "#fff",
-            cursor: "pointer",
-            fontSize: 15,
-            color: COLORS.ink,
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21 21-9.4 21-21c0-1.3-.1-2.7-.4-3.5z" />
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.5 15.9 18.9 13 24 13c3.1 0 5.8 1.1 8 3l6-6C34.5 5.1 29.6 3 24 3 16 3 9 7.6 6.3 14.7z" />
-            <path fill="#4CAF50" d="M24 45c5.5 0 10.4-1.9 14.2-5.1l-6.6-5.4C29.5 36.4 26.9 37 24 37c-5.2 0-9.6-3.3-11.3-8l-6.6 5.1C9 41.3 16 45 24 45z" />
-            <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.6 5.4C41.5 36 45 30.5 45 24c0-1.3-.1-2.7-.4-3.5z" />
-          </svg>
-          Continue with Google
-        </button>
-        <div style={{ fontSize: 12, color: COLORS.slate, textAlign: "center", marginTop: 14, lineHeight: 1.5 }}>
-          Sign in with your school or personal Gmail account.
-        </div>
+        {confirmSent ? (
+          <div style={{ textAlign: "center", padding: "12px 4px" }}>
+            <div style={{ fontSize: 14, color: COLORS.ink, fontFamily: SANS, lineHeight: 1.6 }}>
+              We've sent a confirmation link to <strong>{email}</strong>. Open it to activate your account, then come back and sign in.
+            </div>
+            <button
+              onClick={() => switchMode("signin")}
+              style={{ marginTop: 18, padding: "9px 18px", borderRadius: 7, border: `1px solid ${COLORS.hair}`, background: "#fff", color: COLORS.navy, cursor: "pointer", fontFamily: SANS, fontSize: 13 }}
+            >
+              Back to sign in
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* mode tabs */}
+            <div style={{ display: "flex", background: COLORS.paper, borderRadius: 9, padding: 3, marginBottom: 22 }}>
+              {[
+                { id: "signin", label: "Sign In" },
+                { id: "signup", label: "Sign Up" },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => switchMode(t.id)}
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding: "8px 0",
+                    borderRadius: 7,
+                    border: "none",
+                    cursor: "pointer",
+                    fontFamily: SANS,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    background: mode === t.id ? "#fff" : "transparent",
+                    color: mode === t.id ? COLORS.navy : COLORS.slate,
+                    boxShadow: mode === t.id ? "0 1px 4px rgba(0,0,0,0.12)" : "none",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {mode === "signin" ? (
+              <form onSubmit={submitSignIn}>
+                <TextField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+                <TextField
+                  label="Password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="••••••••"
+                  rightSlot={
+                    <button type="button" onClick={() => setShowPassword((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: COLORS.slate }}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  }
+                />
+                {formError && <div style={{ color: COLORS.alert, fontSize: 12.5, marginBottom: 12, fontFamily: SANS }}>{formError}</div>}
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "none", background: COLORS.royal, color: "#fff", cursor: formLoading ? "default" : "pointer", fontSize: 14.5, fontWeight: 600, fontFamily: SANS, opacity: formLoading ? 0.7 : 1 }}
+                >
+                  {formLoading ? "Signing in…" : "Sign In"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={submitSignUp}>
+                <TextField label="Full name" value={fullName} onChange={setFullName} placeholder="e.g. Ama Mensah" />
+                <TextField label="Email" type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
+                <TextField
+                  label="Password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="At least 6 characters"
+                  rightSlot={
+                    <button type="button" onClick={() => setShowPassword((v) => !v)} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: COLORS.slate }}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  }
+                />
+                <TextField label="Confirm password" type={showPassword ? "text" : "password"} value={confirmPassword} onChange={setConfirmPassword} placeholder="Re-enter password" />
+
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: COLORS.navy, marginBottom: 6, fontFamily: SANS }}>I am a</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { id: "student", label: "Student" },
+                      { id: "teacher", label: "Teacher" },
+                    ].map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setRole(r.id)}
+                        style={{
+                          flex: 1,
+                          padding: "9px 0",
+                          borderRadius: 8,
+                          border: `1px solid ${role === r.id ? COLORS.royal : COLORS.hair}`,
+                          background: role === r.id ? "#EAF0F8" : "#fff",
+                          color: role === r.id ? COLORS.royal : COLORS.slate,
+                          cursor: "pointer",
+                          fontFamily: SANS,
+                          fontSize: 13.5,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {formError && <div style={{ color: COLORS.alert, fontSize: 12.5, marginBottom: 12, fontFamily: SANS }}>{formError}</div>}
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  style={{ width: "100%", padding: "12px 16px", borderRadius: 8, border: "none", background: COLORS.royal, color: "#fff", cursor: formLoading ? "default" : "pointer", fontSize: 14.5, fontWeight: 600, fontFamily: SANS, opacity: formLoading ? 0.7 : 1 }}
+                >
+                  {formLoading ? "Creating account…" : "Create Account"}
+                </button>
+              </form>
+            )}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "20px 0" }}>
+              <div style={{ flex: 1, height: 1, background: COLORS.hair }} />
+              <span style={{ fontSize: 11.5, color: COLORS.slate, fontFamily: SANS }}>OR</span>
+              <div style={{ flex: 1, height: 1, background: COLORS.hair }} />
+            </div>
+
+            <GoogleButton onClick={signInWithGoogle} />
+            <div style={{ fontSize: 11.5, color: COLORS.slate, textAlign: "center", marginTop: 14, lineHeight: 1.5, fontFamily: SANS }}>
+              Use your school or personal Gmail account.
+            </div>
+          </>
+        )}
       </div>
 
       <style>{`
