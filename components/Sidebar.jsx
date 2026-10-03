@@ -6,8 +6,37 @@ import { usePathname } from "next/navigation";
 import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera, MessageSquare } from "lucide-react";
 import { COLORS, SERIF, SANS, PROGRAMMES } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
+import { useTheme, THEMES } from "../lib/ThemeProvider";
 import { supabase } from "../lib/supabaseClient";
 import Avatar from "./Avatar";
+
+function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 4px", marginBottom: 12 }}>
+      {THEMES.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => setTheme(t.id)}
+          title={t.label}
+          style={{
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: t.swatch,
+            border: theme === t.id ? "2px solid #fff" : "2px solid transparent",
+            boxShadow: theme === t.id ? "0 0 0 1.5px rgba(255,255,255,0.5)" : "none",
+            cursor: "pointer",
+            padding: 0,
+          }}
+        />
+      ))}
+      <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.5)", fontFamily: SANS, marginLeft: 2 }}>
+        {THEMES.find((t) => t.id === theme)?.label}
+      </span>
+    </div>
+  );
+}
 
 function NavItem({ href, icon: Icon, label, active, dot }) {
   return (
@@ -102,7 +131,7 @@ function SidebarContent() {
         ))}
       </div>
 
-      {profile?.role === "teacher" && (
+      {(profile?.role === "teacher" || profile?.is_admin) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 18 }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", padding: "0 12px", marginBottom: 6, fontFamily: SANS }}>Staff</div>
           <NavItem href="/lounge" icon={Users} label="Teachers' Lounge" active={pathname === "/lounge"} />
@@ -114,7 +143,10 @@ function SidebarContent() {
         </div>
       )}
 
-      <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ marginTop: "auto" }}>
+        <ThemeSwitcher />
+      </div>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
         <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: "none" }} id="avatar-upload" />
         <label htmlFor="avatar-upload" style={{ position: "relative", cursor: "pointer", flexShrink: 0 }}>
           <Avatar name={profile?.full_name || "?"} size={32} tone={COLORS.sky} avatarUrl={profile?.avatar_url} />
