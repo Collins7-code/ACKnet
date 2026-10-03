@@ -2,13 +2,51 @@
   box-sizing: border-box;
 }
 
+:root,
+[data-theme="classic"] {
+  --c-navy: #0E2A52;
+  --c-royal: #1D5FA8;
+  --c-sky: #4FA8DC;
+  --c-paper: #F6F7FB;
+  --c-ink: #16213A;
+  --c-slate: #5B6B84;
+  --c-live: #2F8F5B;
+  --c-alert: #B34A4A;
+  --c-hair: rgba(14, 42, 82, 0.12);
+}
+
+[data-theme="dark"] {
+  --c-navy: #0A0F1E;
+  --c-royal: #5B93F5;
+  --c-sky: #6FB6E8;
+  --c-paper: #121826;
+  --c-ink: #E7ECF5;
+  --c-slate: #9AA7BD;
+  --c-live: #4CAF78;
+  --c-alert: #E07070;
+  --c-hair: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="gold"] {
+  --c-navy: #2B2110;
+  --c-royal: #B8860B;
+  --c-sky: #D4A64A;
+  --c-paper: #FBF6EA;
+  --c-ink: #2B2110;
+  --c-slate: #7A6A45;
+  --c-live: #4F7942;
+  --c-alert: #A4442B;
+  --c-hair: rgba(184, 134, 11, 0.2);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  background: #F6F7FB;
-  color: #16213A;
+  background: var(--c-paper);
+  color: var(--c-ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 button {
@@ -17,7 +55,7 @@ button {
 
 input:focus,
 textarea:focus {
-  border-color: #1D5FA8 !important;
+  border-color: var(--c-royal) !important;
   outline: none;
 }
 
