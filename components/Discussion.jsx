@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { Send, CornerDownRight, MessageCircle } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { COLORS, SANS } from "../lib/constants";
@@ -170,10 +171,12 @@ export default function Discussion({ hubId }) {
             const expanded = expandedThreads[p.id];
             return (
               <div key={p.id} style={{ display: "flex", gap: 10 }}>
-                <Avatar name={p.profiles?.full_name || "?"} size={34} tone={p.profiles?.role === "teacher" ? COLORS.navy : COLORS.sky} />
+                <Link href={`/profile/${p.author_id}`} style={{ flexShrink: 0, height: 34 }}>
+                  <Avatar name={p.profiles?.full_name || "?"} size={34} tone={p.profiles?.role === "teacher" ? COLORS.navy : COLORS.sky} />
+                </Link>
                 <div style={{ flex: 1, borderBottom: `1px solid ${COLORS.hair}`, paddingBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.ink, fontFamily: SANS }}>{p.profiles?.full_name || "Unknown"}</span>
+                    <Link href={`/profile/${p.author_id}`} style={{ fontWeight: 600, fontSize: 14, color: COLORS.ink, fontFamily: SANS, textDecoration: "none" }}>{p.profiles?.full_name || "Unknown"}</Link>
                     {p.profiles?.role === "teacher" && (
                       <span style={{ fontSize: 11, color: COLORS.navy, background: "#EAF0F8", padding: "1px 7px", borderRadius: 20 }}>Teacher</span>
                     )}
@@ -206,10 +209,12 @@ export default function Discussion({ hubId }) {
                     <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10, borderLeft: `2px solid ${COLORS.hair}`, paddingLeft: 14 }}>
                       {replies.map((r) => (
                         <div key={r.id} style={{ display: "flex", gap: 8 }}>
-                          <Avatar name={r.profiles?.full_name || "?"} size={26} tone={r.profiles?.role === "teacher" ? COLORS.navy : COLORS.sky} />
+                          <Link href={`/profile/${r.author_id}`} style={{ flexShrink: 0, height: 26 }}>
+                            <Avatar name={r.profiles?.full_name || "?"} size={26} tone={r.profiles?.role === "teacher" ? COLORS.navy : COLORS.sky} />
+                          </Link>
                           <div>
                             <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                              <span style={{ fontWeight: 600, fontSize: 13, color: COLORS.ink, fontFamily: SANS }}>{r.profiles?.full_name || "Unknown"}</span>
+                              <Link href={`/profile/${r.author_id}`} style={{ fontWeight: 600, fontSize: 13, color: COLORS.ink, fontFamily: SANS, textDecoration: "none" }}>{r.profiles?.full_name || "Unknown"}</Link>
                               <span style={{ fontSize: 11, color: COLORS.slate }}>{timeAgo(r.created_at)}</span>
                             </div>
                             <div style={{ fontSize: 13, color: COLORS.ink, marginTop: 2, lineHeight: 1.4 }}>{r.body}</div>
