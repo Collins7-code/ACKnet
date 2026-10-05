@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Send, Search, MessageSquarePlus } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { COLORS, SERIF, SANS } from "../lib/constants";
@@ -62,6 +64,7 @@ function NewMessagePicker({ onPick, onClose }) {
 
 export default function Messages() {
   const { profile } = useAuth();
+  const params = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [active, setActive] = useState(null); // { id, full_name, role }
   const [thread, setThread] = useState([]);
@@ -120,6 +123,15 @@ export default function Messages() {
     return () => supabase.removeChannel(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile.id]);
+
+  // Deep link from a profile page: /messages?to=<userId>
+  const toId = params.get("to");
+  useEffect(() => {
+    if (!toId || toId === profile.id) return;
+    supabase.from("profiles").select("id, full_name, role").eq("id", toId).maybeSingle().then(({ data }) => {
+      if (data) setActive(data);
+    });
+  }, [toId, profile.id]);
 
   useEffect(() => {
     if (active) loadThread(active.id);
@@ -200,7 +212,7 @@ export default function Messages() {
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 12, borderBottom: `1px solid ${COLORS.hair}`, marginBottom: 14 }}>
               <Avatar name={active.full_name} size={30} tone={active.role === "teacher" ? COLORS.navy : COLORS.sky} />
-              <div style={{ fontFamily: SERIF, fontSize: 16, color: COLORS.navy }}>{active.full_name}</div>
+              <Link href={`/profile/${active.id}`} style={{ fontFamily: SERIF, fontSize: 16, color: COLORS.navy, textDecoration: "none" }}>{active.full_name}</Link>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, paddingRight: 4 }}>
