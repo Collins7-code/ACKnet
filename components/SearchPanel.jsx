@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, X, MessageSquare, FileText, ClipboardList, NotebookPen, Video } from "lucide-react";
 import { supabase } from "../lib/supabaseClient";
 import { COLORS, SANS } from "../lib/constants";
-import { hubPath, hubLabel, timeAgo } from "../lib/hubs";
+import { hubPath, hubLabel, timeAgo, isLoungeHub } from "../lib/hubs";
 import { useAuth } from "../lib/AuthProvider";
 import Avatar from "./Avatar";
 
@@ -96,7 +96,7 @@ export default function SearchPanel() {
 
       if (cancelled) return;
 
-      const visible = (rows) => (rows || []).filter((r) => isStaff || r.hub_id !== "lounge");
+      const visible = (rows) => (rows || []).filter((r) => isStaff || !isLoungeHub(r.hub_id));
 
       const firstError = [people, posts, docs, tests, assignments, sessions].find((r) => r.error)?.error;
       setError(firstError ? firstError.message : "");
