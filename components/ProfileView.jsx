@@ -49,7 +49,7 @@ export default function ProfileView({ userId }) {
       }
       setPerson(row);
 
-      const hideLounge = (q) => (isStaff ? q : q.neq("hub_id", "lounge"));
+      const hideLounge = (q) => (isStaff ? q : q.not("hub_id", "like", "teachers%"));
       const countOf = (q) => q.then((r) => r.count || 0);
 
       const isTeacher = row.role === "teacher";
