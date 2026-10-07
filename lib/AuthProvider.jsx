@@ -5,11 +5,35 @@ import { supabase } from "./supabaseClient";
 
 const AuthContext = createContext(null);
 
-// Retry a Supabase query a few times before giving up — free-tier Supabase
-// databases can take a while to "wake" after being idle, and a single
-// request can hang (not just fail) during that wake-up. Each attempt gets
-// its own timeout so a hung request is abandoned and retried with a fresh
-// one, rather than blocking forever.
+const PROFILE_CACHE_KEY = "acknet_profile_v1";
+
+// The profile is remembered on this device so the app can open instantly
+// on return visits, then refreshed from the database in the background.
+// This is only used to draw the screen: the database still enforces who is
+// allowed to see or change what.
+function readCachedProfile(userId) {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    return p && p.id === userId ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProfile(profile) {
+  try {
+    if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+    else localStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {
+    // storage unavailable (private mode etc.) — safe to ignore
+  }
+}
+
+// Free-tier Supabase databases can take a while to "wake" after being idle,
+// and a single request can hang (not just fail) during that wake-up. Each
+// attempt gets its own timeout so a hung request is abandoned and retried.
 function withTimeout(promise, ms) {
   return Promise.race([
     promise,
@@ -17,7 +41,7 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-async function withRetry(fn, { attempts = 4, delayMs = 800, timeoutMs = 7000 } = {}) {
+async function withRetry(fn, { attempts = 3, delayMs = 600, timeoutMs = 6000 } = {}) {
   let lastErr;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -37,82 +61,104 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null);
   const [authStage, setAuthStage] = useState("starting");
   const authStageRef = useRef("starting");
+  const inflight = useRef(null); // { id, promise } — stops duplicate profile loads
+  const profileIdRef = useRef(null);
 
   const setStage = useCallback((s) => {
     authStageRef.current = s;
     setAuthStage(s);
   }, []);
 
-  const loadProfile = useCallback(async (user) => {
-    if (!user) {
-      setProfile(null);
-      return;
-    }
-    setStage("profile: looking up");
-    const { data, error: selectError } = await withRetry(() =>
-      supabase.from("profiles").select("*").eq("id", user.id).maybeSingle().then((res) => {
-        if (res.error) throw res.error;
-        return res;
-      })
-    );
+  const fetchProfile = useCallback(
+    async (user) => {
+      setStage("profile: looking up");
+      const { data } = await withRetry(() =>
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle()
+          .then((res) => {
+            if (res.error) throw res.error;
+            return res;
+          })
+      );
+      if (data) return data;
 
-    if (data) {
-      setProfile(data);
-      setStage("done");
-      return;
-    }
+      setStage("profile: creating");
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
+      const avatarUrl = user.user_metadata?.avatar_url || null;
+      // Note: we deliberately IGNORE user.user_metadata.role here. A role
+      // claimed by the client can't be trusted. The only legitimate way to
+      // become a teacher via self sign-up is the staff-access-code flow in
+      // /api/claim-teacher-role, which pre-creates the profile with the
+      // right role (using the service-role key) before this code ever runs.
+      // Everyone else always starts as a student.
+      const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const isFirstAdmin = adminEmails.includes((user.email || "").toLowerCase());
 
-    setStage("profile: creating");
-    const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email;
-    const avatarUrl = user.user_metadata?.avatar_url || null;
-    // Note: we deliberately IGNORE user.user_metadata.role here. A role
-    // claimed by the client (even via our own sign-up form) can't be
-    // trusted — someone could edit the request and claim "teacher" with
-    // no verification. The only legitimate way to become a teacher via
-    // self sign-up is the staff-access-code flow in
-    // /api/claim-teacher-role, which pre-creates the profile with the
-    // right role (using the service-role key) before this code ever runs.
-    // Everyone else always starts as a student.
+      const { data: created, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          full_name: fullName,
+          avatar_url: avatarUrl,
+          email: user.email,
+          role: isFirstAdmin ? "teacher" : "student",
+          is_admin: isFirstAdmin,
+        })
+        .select()
+        .single();
 
-    const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-    const isFirstAdmin = adminEmails.includes((user.email || "").toLowerCase());
+      if (insertError) throw new Error(`profile creation failed: ${insertError.message}`);
+      return created;
+    },
+    [setStage]
+  );
 
-    const { data: created, error: insertError } = await supabase
-      .from("profiles")
-      .insert({
-        id: user.id,
-        full_name: fullName,
-        avatar_url: avatarUrl,
-        email: user.email,
-        role: isFirstAdmin ? "teacher" : "student",
-        is_admin: isFirstAdmin,
-      })
-      .select()
-      .single();
+  // Loads (or clears) the profile. If a load for the same user is already in
+  // progress, everyone shares that one request instead of starting another.
+  const loadProfile = useCallback(
+    (user) => {
+      if (!user) {
+        profileIdRef.current = null;
+        setProfile(null);
+        writeCachedProfile(null);
+        return Promise.resolve();
+      }
+      if (inflight.current && inflight.current.id === user.id) return inflight.current.promise;
 
-    if (!insertError) {
-      setProfile(created);
-      setStage("done");
-    } else {
-      throw new Error(`profile creation failed: ${insertError.message}`);
-    }
-  }, [setStage]);
+      const promise = (async () => {
+        try {
+          const p = await fetchProfile(user);
+          profileIdRef.current = p.id;
+          setProfile(p);
+          writeCachedProfile(p);
+          setStage("done");
+        } finally {
+          inflight.current = null;
+        }
+      })();
+      inflight.current = { id: user.id, promise };
+      return promise;
+    },
+    [fetchProfile, setStage]
+  );
 
   useEffect(() => {
     let mounted = true;
 
     // Safety net: never let the app hang on "Loading…" forever. Set above
-    // the full retry budget (4 attempts x 7s + delays ≈ 30s) so it only
-    // fires once every retry has genuinely been exhausted.
+    // the full retry budget (3 attempts x 6s + delays ≈ 20s).
     const failSafe = setTimeout(() => {
       if (mounted) {
         setAuthError(`Stuck at step: "${authStageRef.current}". Check your connection and try refreshing.`);
         setLoading(false);
       }
-    }, 33000);
+    }, 24000);
 
     (async () => {
       try {
@@ -120,8 +166,24 @@ export function AuthProvider({ children }) {
         const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
         if (!mounted) return;
+
+        const user = data.session?.user ?? null;
         setSession(data.session ?? null);
-        await loadProfile(data.session?.user ?? null);
+
+        // Returning visitor: show the app straight away from the saved
+        // profile, then refresh it quietly. If the refresh fails we simply
+        // keep what we have.
+        const cached = user ? readCachedProfile(user.id) : null;
+        if (cached) {
+          profileIdRef.current = cached.id;
+          setProfile(cached);
+          setStage("done");
+          setLoading(false);
+          loadProfile(user).catch(() => {});
+          return;
+        }
+
+        await loadProfile(user);
       } catch (err) {
         if (mounted) setAuthError(err.message || "Could not connect. Please refresh.");
       } finally {
@@ -132,17 +194,29 @@ export function AuthProvider({ children }) {
       }
     })();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      try {
-        setStage(`auth event: ${event}`);
-        setSession(newSession);
-        await loadProfile(newSession?.user ?? null);
-        setAuthError(null);
-      } catch (err) {
-        setAuthError(err.message || "Could not connect. Please refresh.");
-      } finally {
-        setLoading(false);
-      }
+    // IMPORTANT: this callback must NOT wait on other Supabase calls. Doing
+    // so can deadlock Supabase's internal auth lock and leave the profile
+    // request hanging until it times out. So we only record the session
+    // here, and run the profile lookup a moment later, outside the lock.
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      setSession(newSession);
+
+      // Already handled by the startup code above, or nothing to reload.
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") return;
+      if (event === "SIGNED_IN" && newSession?.user && profileIdRef.current === newSession.user.id) return;
+
+      setTimeout(async () => {
+        if (!mounted) return;
+        try {
+          setStage(`auth event: ${event}`);
+          await loadProfile(newSession?.user ?? null);
+          setAuthError(null);
+        } catch (err) {
+          setAuthError(err.message || "Could not connect. Please refresh.");
+        } finally {
+          setLoading(false);
+        }
+      }, 0);
     });
 
     return () => {
@@ -180,6 +254,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    writeCachedProfile(null);
     await supabase.auth.signOut();
   }, []);
 
