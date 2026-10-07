@@ -88,7 +88,7 @@ export default function HomePage() {
   const [confirmSent, setConfirmSent] = useState(false);
 
   useEffect(() => {
-    if (session) router.replace("/general");
+    if (session) router.replace("/dashboard");
   }, [session, router]);
 
   if (authError) {
