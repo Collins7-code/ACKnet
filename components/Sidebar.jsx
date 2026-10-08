@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera, MessageSquare, Search, User, LayoutDashboard } from "lucide-react";
+import { Home, Users, LogOut, Menu, X, ShieldCheck, Camera, MessageSquare, Search, User, LayoutDashboard, Sparkles } from "lucide-react";
 import { COLORS, SERIF, SANS, PROGRAMMES } from "../lib/constants";
 import { useAuth } from "../lib/AuthProvider";
 import { useTheme, THEMES } from "../lib/ThemeProvider";
@@ -123,6 +123,7 @@ function SidebarContent() {
         <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" active={pathname === "/dashboard"} />
         <NavItem href="/general" icon={Home} label="General Hub" active={pathname === "/general"} />
         <NavItem href="/messages" icon={MessageSquare} label="Messages" active={pathname === "/messages"} />
+        <NavItem href="/assistant" icon={Sparkles} label={profile?.role === "teacher" || profile?.is_admin ? "AI Assistant" : "Study Helper"} active={pathname === "/assistant"} />
         <NavItem href="/search" icon={Search} label="Search" active={pathname === "/search"} />
         <NavItem href="/profile/me" icon={User} label="My Profile" active={pathname?.startsWith("/profile")} />
       </div>
