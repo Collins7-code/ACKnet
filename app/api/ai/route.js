@@ -10,7 +10,8 @@ import {
   extractJson,
   validateQuiz,
   friendlyApiError,
-} from "../../lib/ai";
+} from "../../../lib/ai";
+
 export const maxDuration = 30;
 
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
