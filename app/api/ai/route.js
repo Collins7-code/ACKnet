@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import {
-  DEFAULT_MODEL,
   cleanText,
   clampInt,
   cleanMessages,
@@ -18,46 +17,75 @@ const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 const fail = (error, status) => Response.json({ error }, { status });
 
+// Google renames and retires models often (and new projects can't use the older
+// 2.5 models). So we try the model named in GEMINI_MODEL first, then these in
+// order, skip any that report "not found", and remember the one that works.
+const FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"];
+let workingModel = null;
+const deadModels = new Set();
+
+function modelCandidates() {
+  const list = [process.env.GEMINI_MODEL, workingModel, ...FALLBACK_MODELS].filter(Boolean);
+  return [...new Set(list)].filter((m) => !deadModels.has(m));
+}
+
+const isModelGone = (status, message) =>
+  status === 404 || /no longer available|is not found|not supported for generatecontent/i.test(message);
+
 // Sends the conversation to Google's Gemini API (free tier) and returns the text.
 async function askAI({ system, messages, maxTokens, json = false }) {
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
-  const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": process.env.GEMINI_API_KEY,
+  const payload = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: messages.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      ...(json ? { responseMimeType: "application/json" } : {}),
     },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: system }] },
-      contents: messages.map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
-      })),
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        ...(json ? { responseMimeType: "application/json" } : {}),
-      },
-    }),
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message = body?.error?.message || "";
-    console.error("Gemini API error", res.status, message);
-    const err = new Error(friendlyApiError(res.status, message));
-    err.status = res.status === 429 ? 429 : 502;
-    throw err;
+
+  for (const model of modelCandidates()) {
+    const res = await fetch(`${API_BASE}/${encodeURIComponent(model)}:generateContent`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": process.env.GEMINI_API_KEY,
+      },
+      body: payload,
+    });
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message = body?.error?.message || "";
+      console.error("Gemini API error", model, res.status, message);
+      if (isModelGone(res.status, message)) {
+        deadModels.add(model);
+        continue; // try the next model
+      }
+      const err = new Error(friendlyApiError(res.status, message));
+      err.status = res.status === 429 ? 429 : 502;
+      throw err;
+    }
+
+    const text = (body.candidates?.[0]?.content?.parts || [])
+      .map((p) => p.text || "")
+      .join("")
+      .trim();
+    if (!text) {
+      console.error("Gemini returned no text", model, JSON.stringify(body.promptFeedback || body.candidates?.[0]?.finishReason || ""));
+      const err = new Error("The AI couldn't answer that one. Try asking it a different way.");
+      err.status = 502;
+      throw err;
+    }
+    workingModel = model;
+    return text;
   }
-  const text = (body.candidates?.[0]?.content?.parts || [])
-    .map((p) => p.text || "")
-    .join("")
-    .trim();
-  if (!text) {
-    console.error("Gemini returned no text", JSON.stringify(body.promptFeedback || body.candidates?.[0]?.finishReason || ""));
-    const err = new Error("The AI couldn't answer that one. Try asking it a different way.");
-    err.status = 502;
-    throw err;
-  }
-  return text;
+
+  const err = new Error("The AI model is unavailable right now. Please tell an admin.");
+  err.status = 502;
+  throw err;
 }
 
 export async function POST(request) {
@@ -99,7 +127,7 @@ export async function POST(request) {
         programme: cleanText(input.programme, 60),
         subject: cleanText(input.subject, 60),
       });
-      maxTokens = 2048;
+      maxTokens = 4096;
     } else if (mode === "quiz") {
       const topic = cleanText(input.topic, 200);
       const notes = cleanText(input.notes, 12000);
@@ -108,7 +136,7 @@ export async function POST(request) {
       const difficulty = ["easy", "mixed", "hard"].includes(input.difficulty) ? input.difficulty : "mixed";
       const programme = cleanText(input.programme, 60);
       system = quizSystem();
-      maxTokens = 6000;
+      maxTokens = 8192;
       messages = [
         {
           role: "user",
@@ -125,7 +153,7 @@ export async function POST(request) {
       const topic = cleanText(input.topic, 200);
       if (!topic) return fail("Please enter the lesson topic.", 400);
       system = lessonSystem();
-      maxTokens = 4096;
+      maxTokens = 6144;
       messages = [
         {
           role: "user",
