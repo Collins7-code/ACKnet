@@ -8,6 +8,16 @@ import { COLORS, SANS } from "../lib/constants";
 
 const HAND_TOPIC = "hand-raise";
 
+// What LiveKit's numeric "reason" codes mean, in plain words.
+const DISCONNECT_MESSAGES = {
+  2: "You joined this session from another device or tab, so this one was closed.",
+  3: "The video server restarted. Please rejoin.",
+  4: "The host removed you from this session.",
+  5: "The host ended this session.",
+  7: "We couldn't finish connecting. Please try again.",
+  10: "This session has ended.",
+};
+
 function ParticipantTile({ participant, isLocal, handRaised, canModerate, onToggleMute, muteBusy }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
@@ -107,6 +117,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
   const [handRaised, setHandRaised] = useState(false);
   const [raisedHands, setRaisedHands] = useState({});
   const [muteBusyId, setMuteBusyId] = useState(null);
+  const [attempt, setAttempt] = useState(0);
 
   const setStageBoth = (s) => {
     stageRef.current = s;
@@ -118,9 +129,9 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
   }, []);
 
   const sendHandState = useCallback((room, raised) => {
-    const payload = new TextEncoder().encode(JSON.stringify({ identity: participantName, raised }));
+    const payload = new TextEncoder().encode(JSON.stringify({ identity: room.localParticipant.identity, raised }));
     room.localParticipant.publishData(payload, { reliable: true, topic: HAND_TOPIC });
-  }, [participantName]);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -129,10 +140,13 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
     (async () => {
       try {
         setStageBoth("requesting access token");
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error("Please sign in again.");
         const res = await fetch("/api/livekit-token", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomName, participantName, isHost }),
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ roomName }),
         });
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || "Could not get a video token.");
@@ -163,7 +177,10 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
           if (manualLeaveRef.current) {
             onLeave?.();
           } else {
-            setError(`Connection dropped unexpectedly${reason ? ` (reason: ${reason})` : ""}. This usually means the network is blocking WebRTC media, even over the relay path.`);
+            setError(
+              DISCONNECT_MESSAGES[reason] ||
+                `You were disconnected${reason ? ` (code ${reason})` : ""}. Check your internet connection, then tap "Try again".`
+            );
             setConnecting(false);
           }
         });
@@ -207,7 +224,7 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
       room?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomName, participantName, isHost]);
+  }, [roomName, participantName, isHost, attempt]);
 
   const toggleMic = async () => {
     const next = !micOn;
@@ -224,7 +241,8 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
   const toggleHand = () => {
     const next = !handRaised;
     setHandRaised(next);
-    setRaisedHands((prev) => ({ ...prev, [participantName]: next }));
+    const myId = roomRef.current?.localParticipant.identity;
+    if (myId) setRaisedHands((prev) => ({ ...prev, [myId]: next }));
     if (roomRef.current) sendHandState(roomRef.current, next);
   };
 
@@ -292,6 +310,20 @@ export default function LiveVideoRoom({ roomName, participantName, isHost, title
         {error && (
           <div style={{ color: "#fff", background: "rgba(200,40,40,0.35)", border: "1px solid #d9534f", borderRadius: 8, fontFamily: SANS, fontSize: 13, textAlign: "center", padding: 20, fontWeight: 600 }}>
             ⚠ {error}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
+              <button
+                onClick={() => { setError(null); setConnecting(true); setAttempt((a) => a + 1); }}
+                style={{ padding: "7px 16px", borderRadius: 8, border: "none", background: COLORS.royal, color: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 13, fontWeight: 600 }}
+              >
+                Try again
+              </button>
+              <button
+                onClick={leave}
+                style={{ padding: "7px 16px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.4)", background: "transparent", color: "#fff", cursor: "pointer", fontFamily: SANS, fontSize: 13 }}
+              >
+                Leave
+              </button>
+            </div>
           </div>
         )}
         {!connecting && !error && (
