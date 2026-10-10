@@ -7,6 +7,7 @@ import { COLORS, SANS } from "../../lib/constants";
 import { useAuth } from "../../lib/AuthProvider";
 import { timeAgo } from "../../lib/hubs";
 import { Card, Btn, PanelHeader, Empty, ErrorText, Chips, inputStyle } from "./ui";
+import { api } from "../assess/api";
 
 const HUB = "teachers";
 const FOLDERS = [
@@ -52,7 +53,7 @@ export default function Library() {
     if (!file) return;
     setUploading(true);
     setError("");
-    const path = `${HUB}/${Date.now()}-${file.name}`;
+    const path = `${HUB}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
     const { error: upErr } = await supabase.storage.from("documents").upload(path, file);
     if (upErr) {
       setError(upErr.message);
@@ -79,13 +80,12 @@ export default function Library() {
 
   const remove = async (d) => {
     if (!window.confirm(`Delete "${d.name}"?`)) return;
-    const { error: err } = await supabase.from("documents").delete().eq("id", d.id);
-    if (err) {
-      setError(err.message);
-      return;
+    try {
+      await api(`/api/documents?id=${d.id}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      setError(e.message);
     }
-    await supabase.storage.from("documents").remove([d.storage_path]);
-    load();
   };
 
   const countIn = (id) => docs.filter((d) => (d.folder || "other") === id).length;
